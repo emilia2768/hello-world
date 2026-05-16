@@ -1,0 +1,132 @@
+name: Website CI/CD Pipeline
+
+# 触发条件：推送代码到main分支或创建Pull Request时
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  # 第一个任务：验证和构建
+  validate:
+    runs-on: windows-latest  # 使用Windows环境
+    
+    steps:
+    # 1. 检出代码
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    # 2. 列出所有文件（查看目录结构）
+    - name: List files
+      run: dir
+    
+    # 3. 检查必要的文件是否存在
+    - name: Check required files
+      run: |
+        echo "检查必要的HTML/CSS/JS文件..."
+        if (Test-Path "index.html") {
+          echo "✅ index.html 存在"
+        } else {
+          echo "❌ 错误: 缺少 index.html 文件"
+          exit 1
+        }
+        
+        if (Test-Path "style.css") {
+          echo "✅ style.css 存在"
+        } else {
+          echo "⚠️  警告: 缺少 style.css 文件"
+        }
+        
+        if (Test-Path "script.js") {
+          echo "✅ script.js 存在"
+        } else {
+          echo "⚠️  警告: 缺少 script.js 文件"
+        }
+    
+    # 4. 检查HTML文件的基本结构
+    - name: Validate HTML structure
+      run: |
+        echo "验证HTML文件..."
+        $content = Get-Content index.html -Raw
+        $errors = @()
+        
+        # 检查DOCTYPE
+        if ($content -notmatch "<!DOCTYPE html>") {
+          $errors += "缺少 <!DOCTYPE html> 声明"
+        }
+        
+        # 检查title标签
+        if ($content -notmatch "<title>") {
+          $errors += "缺少 <title> 标签"
+        }
+        
+        # 检查是否包含body
+        if ($content -notmatch "<body>") {
+          $errors += "缺少 <body> 标签"
+        }
+        
+        if ($errors.Count -eq 0) {
+          echo "✅ HTML文件结构验证通过"
+        } else {
+          echo "❌ HTML验证失败:"
+          foreach ($err in $errors) {
+            echo "  - $err"
+          }
+          exit 1
+        }
+    
+    # 5. 检查CSS和JS链接
+    - name: Check resource links
+      run: |
+        echo "检查资源链接..."
+        $html = Get-Content index.html -Raw
+        
+        if ($html -match "style\.css") {
+          echo "✅ 链接了CSS文件"
+        } else {
+          echo "⚠️  没有找到CSS文件链接"
+        }
+        
+        if ($html -match "script\.js") {
+          echo "✅ 链接了JavaScript文件"
+        } else {
+          echo "⚠️  没有找到JavaScript文件链接"
+        }
+    
+    # 6. 生成构建信息
+    - name: Generate build info
+      run: |
+        echo "生成构建信息..."
+        $date = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+        echo "构建时间: $date" > build-info.txt
+        echo "系统: Windows" >> build-info.txt
+        echo "运行器: $env:RUNNER_OS" >> build-info.txt
+        echo "✅ 构建完成!" >> build-info.txt
+        Get-Content build-info.txt
+    
+    # 7. 上传构建产物（用于保存构建信息）
+    - name: Upload build artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: website-build-info
+        path: build-info.txt
+  
+  # 第二个任务：部署测试（可选）
+  deploy-test:
+    needs: validate  # 依赖validate任务，只有validate成功后才会运行
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Deploy simulation
+      run: |
+        echo "🎉 模拟部署到服务器..."
+        echo "网站包含以下文件:"
+        find . -name "*.html" -o -name "*.css" -o -name "*.js" | sort
+        echo ""
+        echo "✅ 部署测试完成！"
+        echo "如果要实际部署，可以添加FTP或GitHub Pages步骤"
